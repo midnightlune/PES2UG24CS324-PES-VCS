@@ -138,6 +138,55 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     }
     *slash = '\0';
 
+    // mkdir shard dir
+    mkdir(dir, 0755); //ignore error if exists
+
+    // 5. temp file path
+    char tmp_path[512];
+    snprintf(tmp_path, sizeof(tmp_path), "%s/tmpXXXXXX", dir);
+
+    int tmp_fd = mkstemp(tmp_path);
+    if (tmp_fd < 0) {
+        free(full);
+        return -1;
+    }
+
+    // 6. writing data
+    ssize_t written = write(tmp_fd, full, total_len);
+    if (written != (ssize_t)total_len) {
+        close(tmp_fd);
+        unlink(tmp_path);
+        free(full);
+        return -1;
+    }
+
+    // fsync file
+    if (fsync(tmp_fd) < 0) {
+        close(tmp_fd);
+        unlink(tmp_path);
+        free(full);
+        return -1;
+    }
+
+    close(tmp_fd);
+
+    // 7. atomic rename
+    if (rename(tmp_path, path) < 0) {
+        unlink(tmp_path);
+        free(full);
+        return -1;
+    }
+
+    // 8. fsync directory
+    int dir_fd = open(dir, O_RDONLY);
+    if (dir_fd >= 0) {
+        fsync(dir_fd);
+        close(dir_fd);
+    }
+
+    free(full);
+    return 0;
+
 }
 
 // Read an object from the store.
