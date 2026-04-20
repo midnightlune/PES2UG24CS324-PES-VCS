@@ -188,7 +188,7 @@ int index_save(const Index *index) {
             return -1;
         }
     }
-    
+
     if (fflush(f) != 0) {
         fclose(f);
         unlink(tmp_path);
@@ -214,4 +214,60 @@ int index_save(const Index *index) {
         return -1;
     }
     return 0;
+}
+
+int index_add(Index *index, const char *path) {
+    struct stat st;
+    if (stat(path, &st) != 0) {
+        fprintf(stderr, "error: cannot stat '%s'\n", path);
+        return -1;
+    }
+    if (!S_ISREG(st.st_mode)) {
+        fprintf(stderr, "error: not a regular file: '%s'\n", path);
+        return -1;
+    }
+
+    FILE *fp = fopen(path, "rb");
+    if (!fp) {
+        fprintf(stderr, "error: cannot open '%s'\n", path);
+        return -1;
+    }
+
+    void *data = malloc((size_t)st.st_size);
+    if (!data) {
+        fclose(fp);
+        return -1;
+    }
+
+    size_t got = fread(data, 1, (size_t)st.st_size, fp);
+    fclose(fp);
+    if (got != (size_t)st.st_size) {
+        free(data);
+        return -1;
+    }
+
+    ObjectID id;
+    if (object_write(OBJ_BLOB, data, (size_t)st.st_size, &id) != 0) {
+        free(data);
+        return -1;
+    }
+    free(data);
+
+    uint32_t mode = 0100644;
+    if (st.st_mode & S_IXUSR) mode = 0100755;
+
+    IndexEntry *e = index_find(index, path);
+    if (!e) {
+        if (index->count >= MAX_INDEX_ENTRIES) return -1;
+        e = &index->entries[index->count++];
+        strncpy(e->path, path, sizeof(e->path) - 1);
+        e->path[sizeof(e->path) - 1] = '\0';
+    }
+
+    e->mode = mode;
+    e->hash = id;
+    e->mtime_sec = (uint64_t)st.st_mtime;
+    e->size = (uint32_t)st.st_size;
+
+    return index_save(index);
 }
