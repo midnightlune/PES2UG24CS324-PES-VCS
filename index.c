@@ -105,3 +105,42 @@ int index_status(const Index *index) {
 
     return 0;
 }
+
+// index_load
+
+int index_load(Index *index) {
+    index->count = 0;
+    FILE *f = fopen(INDEX_FILE, "r");
+    if (!f) {
+        if (errno == ENOENT) return 0;
+        return -1;
+    }
+
+    char line[1024];
+    while (fgets(line, sizeof(line), f)) {
+        line[strcspn(line, "\r\n")] = '\0';
+        if (line[0] == '\0') continue;
+
+        unsigned int mode = 0;
+        char hex[HASH_HEX_SIZE + 1];
+        unsigned long long mtime_sec = 0;
+        unsigned int size = 0;
+        char path[512];
+
+        int n = sscanf(line, "%o %64[0-9a-fA-F] %llu %u %511[^\n]",
+                       &mode, hex, &mtime_sec, &size, path);
+        if (n != 5) {
+            fclose(f);
+            return -1;
+        }
+
+        if (index->count >= MAX_INDEX_ENTRIES) {
+            fclose(f);
+            return -1;
+        }
+    }
+
+    fclose(f);
+    return 0;
+}
+
