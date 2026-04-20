@@ -202,3 +202,29 @@ static int write_tree_slice(IndexEntry *entries, int from, int to, ObjectID *out
     free(blob);
     return rc;
 }
+
+int tree_from_index(ObjectID *id_out) {
+    if (!id_out) return -1;
+
+    Index idx;
+    if (index_load(&idx) != 0) return -1;
+
+    if (idx.count == 0) {
+        Tree empty = {0};
+        void *data;
+        size_t len;
+        if (tree_serialize(&empty, &data, &len) != 0) return -1;
+        int rc = object_write(OBJ_TREE, data, len, id_out);
+        free(data);
+        return rc;
+    }
+
+    IndexEntry *sorted = malloc((size_t)idx.count * sizeof(IndexEntry));
+    if (!sorted) return -1;
+    memcpy(sorted, idx.entries, (size_t)idx.count * sizeof(IndexEntry));
+    qsort(sorted, (size_t)idx.count, sizeof(IndexEntry), cmp_index_path);
+
+    int rc = write_tree_slice(sorted, 0, idx.count, id_out);
+    free(sorted);
+    return rc;
+}
