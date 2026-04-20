@@ -230,4 +230,77 @@ int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_
         return -1;
     }
 
+    unsigned char *buf = malloc(size);
+    if (!buf) {
+        fclose(f);
+        return -1;
+    }
+
+    if (fread(buf, 1, size, f) != (size_t)size) {
+        fclose(f);
+        free(buf);
+        return -1;
+    }
+
+    fclose(f);
+
+    // 4. Verify hash
+    ObjectID computed;
+    compute_hash(buf, size, &computed);
+
+    if (memcmp(computed.hash, id->hash, HASH_SIZE) != 0) {
+        free(buf);
+        return -1;
+    }
+
+    // 3. Parse header
+    void *nul = memchr(buf, '\0', size);
+    if (!nul) {
+        free(buf);
+        return -1;
+    }
+
+    size_t header_len = (unsigned char *)nul - buf;
+    char *header = (char *)buf;
+
+    // Parse type and size
+    char type_str[16];
+    size_t data_len;
+
+    if (sscanf(header, "%15s %zu", type_str, &data_len) != 2) {
+        free(buf);
+        return -1;
+    }
+
+    ObjectType type;
+    if (strcmp(type_str, "blob") == 0) type = OBJ_BLOB;
+    else if (strcmp(type_str, "tree") == 0) type = OBJ_TREE;
+    else if (strcmp(type_str, "commit") == 0) type = OBJ_COMMIT;
+    else {
+        free(buf);
+        return -1;
+    }
+
+    // Validate size
+    if (header_len + 1 + data_len != (size_t)size) {
+        free(buf);
+        return -1;
+    }
+
+    // 6. Extract data
+    void *out = malloc(data_len);
+    if (!out) {
+        free(buf);
+        return -1;
+    }
+
+    memcpy(out, buf + header_len + 1, data_len);
+
+    *type_out = type;
+    *data_out = out;
+    *len_out = data_len;
+
+    free(buf);
+    return 0;
+
 }
