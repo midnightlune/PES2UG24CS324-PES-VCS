@@ -138,7 +138,7 @@ int index_load(Index *index) {
             fclose(f);
             return -1;
         }
-        
+
         IndexEntry *e = &index->entries[index->count++];
         e->mode = mode;
         if (hex_to_hash(hex, &e->hash) != 0) {
@@ -153,4 +153,39 @@ int index_load(Index *index) {
 
     fclose(f);
     return 0;
+}
+
+int index_save(const Index *index) {
+    if (mkdir(PES_DIR, 0755) != 0 && errno != EEXIST) return -1;
+
+    size_t n = (size_t)index->count;
+    IndexEntry *sorted = NULL;
+    if (n > 0) {
+        sorted = malloc(n * sizeof(IndexEntry));
+        if (!sorted) return -1;
+        memcpy(sorted, index->entries, n * sizeof(IndexEntry));
+        qsort(sorted, n, sizeof(IndexEntry), cmp_index_path);
+    }
+
+    char tmp_path[512];
+    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", INDEX_FILE);
+
+    FILE *f = fopen(tmp_path, "w");
+    if (!f) {
+        free(sorted);
+        return -1;
+    }
+
+    for (size_t i = 0; i < n; i++) {
+        const IndexEntry *e = &sorted[i];
+        char hex[HASH_HEX_SIZE + 1];
+        hash_to_hex(&e->hash, hex);
+        if (fprintf(f, "%06o %s %" PRIu64 " %u %s\n",
+                    e->mode, hex, e->mtime_sec, e->size, e->path) < 0) {
+            fclose(f);
+            unlink(tmp_path);
+            free(sorted);
+            return -1;
+        }
+    }
 }
