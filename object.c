@@ -94,9 +94,31 @@ int object_exists(const ObjectID *id) {
 //
 // Returns 0 on success, -1 on error.
 int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out) {
-    // TODO: Implement
-    (void)type; (void)data; (void)len; (void)id_out;
-    return -1;
+
+    // 1. build header
+    const char *type_str =
+        (type == OBJ_BLOB) ? "blob" :
+        (type == OBJ_TREE) ? "tree" :
+        (type == OBJ_COMMIT) ? "commit" : NULL;
+
+    if (!type_str) return -1;
+
+    char header[64];
+    int header_len = snprintf(header, sizeof(header), "%s %zu", type_str, len) + 1; //include '\0'
+
+    size_t total_len = header_len + len;
+    unsigned char *full = malloc(total_len);
+    if (!full) return -1;
+
+    memcpy(full, header, header_len);
+    memcpy(full + header_len, data, len);
+
+    // 2. compute hash
+    ObjectID id;
+    compute_hash(full, total_len, &id);
+
+    if (id_out) *id_out = id;
+
 }
 
 // Read an object from the store.
