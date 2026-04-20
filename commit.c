@@ -200,3 +200,17 @@ int head_update(const ObjectID *new_commit) {
 //   - head_update       : moves the branch pointer to your new commit
 //
 // Returns 0 on success, -1 on error.
+
+int commit_create(const char *message, ObjectID *commit_id_out) {
+    ObjectID tree_id;
+    if (tree_from_index(&tree_id) != 0) return -1;
+
+    Commit c;
+    memset(&c, 0, sizeof(c));
+    c.tree = tree_id;
+    if (head_read(&c.parent) == 0) {
+        c.has_parent = 1;
+    } else {
+        c.has_parent = 0;
+    }
+}
