@@ -158,7 +158,7 @@ static int write_tree_slice(IndexEntry *entries, int from, int to, ObjectID *out
             e->hash = entries[i].hash;
             strncpy(e->name, comp, sizeof(e->name) - 1);
             e->name[sizeof(e->name) - 1] = '\0';
-        }
+        } 
         else {
             IndexEntry *sub = malloc((size_t)(j - i) * sizeof(IndexEntry));
             if (!sub) return -1;
@@ -178,6 +178,27 @@ static int write_tree_slice(IndexEntry *entries, int from, int to, ObjectID *out
                 }
                 sub_n++;
             }
+
+            ObjectID sub_id;
+            int rc = write_tree_slice(sub, 0, sub_n, &sub_id);
+            free(sub);
+            if (rc != 0) return -1;
+
+            if (tree.count >= MAX_TREE_ENTRIES) return -1;
+            TreeEntry *e = &tree.entries[tree.count++];
+            e->mode = MODE_DIR;
+            e->hash = sub_id;
+            strncpy(e->name, comp, sizeof(e->name) - 1);
+            e->name[sizeof(e->name) - 1] = '\0';
         }
+
+        i = j;
     }
+
+    void *blob;
+    size_t blen;
+    if (tree_serialize(&tree, &blob, &blen) != 0) return -1;
+    int rc = object_write(OBJ_TREE, blob, blen, out_id);
+    free(blob);
+    return rc;
 }
