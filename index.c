@@ -188,4 +188,30 @@ int index_save(const Index *index) {
             return -1;
         }
     }
+    
+    if (fflush(f) != 0) {
+        fclose(f);
+        unlink(tmp_path);
+        free(sorted);
+        return -1;
+    }
+    int fd = fileno(f);
+    if (fd < 0 || fsync(fd) != 0) {
+        fclose(f);
+        unlink(tmp_path);
+        free(sorted);
+        return -1;
+    }
+    if (fclose(f) != 0) {
+        unlink(tmp_path);
+        free(sorted);
+        return -1;
+    }
+
+    free(sorted);
+    if (rename(tmp_path, INDEX_FILE) != 0) {
+        unlink(tmp_path);
+        return -1;
+    }
+    return 0;
 }
