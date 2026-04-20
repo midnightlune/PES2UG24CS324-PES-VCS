@@ -106,7 +106,7 @@ int index_status(const Index *index) {
     return 0;
 }
 
-// index_load
+// ─── index_load / index_save / index_add ────────────────────────────────────
 
 int index_load(Index *index) {
     index->count = 0;
@@ -138,9 +138,19 @@ int index_load(Index *index) {
             fclose(f);
             return -1;
         }
+
+        IndexEntry *e = &index->entries[index->count++];
+        e->mode = mode;
+        if (hex_to_hash(hex, &e->hash) != 0) {
+            fclose(f);
+            return -1;
+        }
+        e->mtime_sec = mtime_sec;
+        e->size = size;
+        strncpy(e->path, path, sizeof(e->path) - 1);
+        e->path[sizeof(e->path) - 1] = '\0';
     }
 
     fclose(f);
     return 0;
 }
-
