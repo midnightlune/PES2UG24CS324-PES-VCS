@@ -103,3 +103,19 @@ int tree_serialize(const Tree *tree, void **data_out, size_t *len_out) {
 static int cmp_index_path(const void *a, const void *b) {
     return strcmp(((const IndexEntry *)a)->path, ((const IndexEntry *)b)->path);
 }
+
+static int first_path_component(const char *path, char *name, size_t name_cap, const char **rest_out) {
+    const char *slash = strchr(path, '/');
+    if (!slash) {
+        if (strlen(path) >= name_cap) return -1;
+        strcpy(name, path);
+        *rest_out = "";
+        return 0;
+    }
+    size_t len = (size_t)(slash - path);
+    if (len >= name_cap) return -1;
+    memcpy(name, path, len);
+    name[len] = '\0';
+    *rest_out = slash + 1;
+    return 0;
+}
