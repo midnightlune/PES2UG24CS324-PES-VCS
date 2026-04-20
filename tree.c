@@ -119,3 +119,65 @@ static int first_path_component(const char *path, char *name, size_t name_cap, c
     *rest_out = slash + 1;
     return 0;
 }
+
+static int write_tree_slice(IndexEntry *entries, int from, int to, ObjectID *out_id);
+
+static int write_tree_slice(IndexEntry *entries, int from, int to, ObjectID *out_id) {
+    if (from >= to) {
+        Tree empty = {0};
+        void *data;
+        size_t len;
+        if (tree_serialize(&empty, &data, &len) != 0) return -1;
+        int rc = object_write(OBJ_TREE, data, len, out_id);
+        free(data);
+        return rc;
+    }
+
+    Tree tree;
+    tree.count = 0;
+
+    int i = from;
+    while (i < to) {
+        char comp[256];
+        const char *rest_i;
+        if (first_path_component(entries[i].path, comp, sizeof(comp), &rest_i) != 0) return -1;
+
+        int j = i + 1;
+        while (j < to) {
+            char comp2[256];
+            const char *rest_j;
+            if (first_path_component(entries[j].path, comp2, sizeof(comp2), &rest_j) != 0) return -1;
+            if (strcmp(comp, comp2) != 0) break;
+            j++;
+        }
+
+        if (j == i + 1 && rest_i[0] == '\0') {
+            if (tree.count >= MAX_TREE_ENTRIES) return -1;
+            TreeEntry *e = &tree.entries[tree.count++];
+            e->mode = entries[i].mode;
+            e->hash = entries[i].hash;
+            strncpy(e->name, comp, sizeof(e->name) - 1);
+            e->name[sizeof(e->name) - 1] = '\0';
+        }
+        else {
+            IndexEntry *sub = malloc((size_t)(j - i) * sizeof(IndexEntry));
+            if (!sub) return -1;
+            int sub_n = 0;
+            for (int k = i; k < j; k++) {
+                sub[sub_n] = entries[k];
+                const char *p = entries[k].path;
+                size_t clen = strlen(comp);
+                if (p[clen] == '/') {
+                    if (strlen(p + clen + 1) >= sizeof(sub[sub_n].path)) {
+                        free(sub);
+                        return -1;
+                    }
+                    strcpy(sub[sub_n].path, p + clen + 1);
+                } else {
+                    sub[sub_n].path[0] = '\0';
+                }
+                sub_n++;
+            }
+        }
+    }
+}
