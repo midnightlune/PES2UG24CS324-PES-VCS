@@ -119,6 +119,25 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
 
     if (id_out) *id_out = id;
 
+    // 3. deduplication
+    if (object_exists(&id)) {
+        free(full);
+        return 0;
+    }
+
+    // 4. build paths
+    char path[512];
+    object_path(&id, path, sizeof(path));
+
+    char dir[512];
+    snprintf(dir, sizeof(dir), "%s", path);
+    char *slash = strrchr(dir, '/');
+    if (!slash) {
+        free(full);
+        return -1;
+    }
+    *slash = '\0';
+
 }
 
 // Read an object from the store.
